@@ -1,0 +1,32 @@
+{
+  "version": "1",
+  "factors": {
+    "weights": { "budgetImpact": 0.5, "longTermBenefit": 0.35, "urgency": 0.15 },
+    "scales": { "budgetImpact": [-2, 2], "longTermBenefit": [0, 2], "urgency": [0, 1] }
+  },
+  "templates": [
+    {
+      "pattern": ["épargn", "dîner", "sortir"],
+      "options": [
+        {
+          "label": "Épargner maintenant",
+          "pros": ["Augmente ton épargne", "Réduit le stress financier"],
+          "cons": ["Moins de plaisir immédiat"]
+        },
+        {
+          "label": "Sortir dîner avec budget fixe",
+          "pros": ["Social", "Bien-être"],
+          "cons": ["Coût non récupérable"]
+        }
+      ],
+      "defaults": { "budgetImpact": 1.2, "longTermBenefit": 1.5, "urgency": 0.3 }
+    }
+  ],
+  "genericOptions": [
+    {
+      "label": "Reporter la décision 24h",
+      "pros": ["Réduit achat impulsif"],
+      "cons": ["Retarde la gratification"]
+    }
+  ]
+}

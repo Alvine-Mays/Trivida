@@ -1,0 +1,1047 @@
+openapi: 3.0.3
+info:
+  title: Trivida API
+  version: 1.0.0
+  description: >-
+    Backend REST API for Trivida MVP (Node/Express + MongoDB). JWT access 15 min, refresh rotation 7 days.
+servers:
+  - url: https://api.trivida.example.com
+    description: Production
+  - url: http://localhost:4000
+    description: Local Dev
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    CronKey:
+      type: apiKey
+      in: header
+      name: X-Cron-Key
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      required: false
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      required: false
+    IfMatch:
+      name: If-Match
+      in: header
+      schema: { type: string }
+      required: false
+    ETag:
+      name: ETag
+      in: header
+      schema: { type: string }
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { nullable: true }
+    Tokens:
+      type: object
+      required: [accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt]
+      properties:
+        accessToken: { type: string }
+        accessTokenExpiresAt: { type: integer, description: unix ms }
+        refreshToken: { type: string }
+        refreshTokenExpiresAt: { type: integer, description: unix ms }
+    User:
+      type: object
+      required: [_id, email, locale, currency]
+      properties:
+        _id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string, nullable: true }
+        locale: { type: string, enum: [fr, en], default: fr }
+        currency: { type: string, default: XAF }
+        expoPushTokens:
+          type: array
+          items: { type: string }
+    Factors:
+      type: object
+      required: [budgetImpact, longTermBenefit, urgency]
+      properties:
+        budgetImpact: { type: number, minimum: -2, maximum: 2 }
+        longTermBenefit: { type: number, minimum: 0, maximum: 2 }
+        urgency: { type: number, minimum: 0, maximum: 1 }
+    WeatherContext:
+      type: object
+      properties:
+        city: { type: string }
+        country: { type: string }
+        loc:
+          type: object
+          properties:
+            lat: { type: number }
+            lon: { type: number }
+        condition: { type: string }
+        temperature: { type: number }
+    Decision:
+      type: object
+      required: [_id, userId, title, factors, score, status, createdAt, updatedAt]
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        title: { type: string }
+        context: { type: string, nullable: true }
+        factors: { $ref: '#/components/schemas/Factors' }
+        weatherContext: { $ref: '#/components/schemas/WeatherContext' }
+        score: { type: number }
+        recommendation: { type: string, nullable: true }
+        chosenOption: { type: string, nullable: true }
+        status: { type: string, enum: [pending, decided] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FinanceCategory:
+      type: object
+      required: [_id, userId, name, type]
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [expense, income, savings] }
+        color: { type: string }
+        icon: { type: string }
+    Transaction:
+      type: object
+      required: [_id, userId, categoryId, amountMinor, currency, date]
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        categoryId: { type: string }
+        eventId: { type: string }
+        amountMinor: { type: integer }
+        currency: { type: string }
+        date: { type: string, format: date-time }
+        note: { type: string }
+    SavingsPlan:
+      type: object
+      required: [_id, userId, name, cadence, targetAmountMinor, currency, startDate]
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        cadence: { type: string, enum: [weekly, monthly] }
+        targetAmountMinor: { type: integer }
+        currency: { type: string }
+        startDate: { type: string, format: date-time }
+        annualInterestRate: { type: number }
+        autoRemind: { type: boolean }
+        nextReminderAt: { type: string, format: date-time }
+    FXRates:
+      type: object
+      properties:
+        base: { type: string }
+        rates:
+          type: object
+          additionalProperties: { type: number }
+        fetchedAt: { type: string, format: date-time }
+        ttlSeconds: { type: integer }
+    Weather:
+      type: object
+      properties:
+        condition: { type: string }
+        temperature: { type: number }
+        humidity: { type: number }
+        city: { type: string }
+        country: { type: string }
+        fetchedAt: { type: string, format: date-time }
+        ttlSeconds: { type: integer }
+    Timezone:
+      type: object
+      properties:
+        zoneName: { type: string }
+        gmtOffset: { type: integer }
+        countryName: { type: string }
+        fetchedAt: { type: string, format: date-time }
+        ttlSeconds: { type: integer }
+    Event:
+      type: object
+      required: [_id, userId, title, dateTime, visibility, slug, costPerGuestMinor, currency]
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        title: { type: string }
+        dateTime: { type: string, format: date-time }
+        timeZone: { type: string }
+        location: { type: string }
+        visibility: { type: string, enum: [public, private] }
+        slug: { type: string }
+        costPerGuestMinor: { type: integer }
+        currency: { type: string }
+        allowPlusOnes: { type: boolean }
+        capacity: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EventPublic:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+      properties:
+        userId: { readOnly: true }
+        accessCodeHash: { readOnly: true }
+    Invitee:
+      type: object
+      required: [_id, eventId, name, status, plusOnes]
+      properties:
+        _id: { type: string }
+        eventId: { type: string }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        status: { type: string, enum: [pending, yes, no, maybe] }
+        plusOnes: { type: integer }
+    Budget:
+      type: object
+      properties:
+        actualBudgetMinor: { type: integer }
+        currency: { type: string }
+        yesCount: { type: integer }
+        plusOnesYes: { type: integer }
+
+paths:
+  /auth/register:
+    post:
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+                locale: { type: string, enum: [fr, en] }
+                currency: { type: string }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  tokens: { $ref: '#/components/schemas/Tokens' }
+        '400': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/login:
+    post:
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  tokens: { $ref: '#/components/schemas/Tokens' }
+        '401': { description: Invalid credentials, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/oauth/google:
+    post:
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { user: { $ref: '#/components/schemas/User' }, tokens: { $ref: '#/components/schemas/Tokens' } } } } } }
+  /auth/oauth/apple:
+    post:
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { user: { $ref: '#/components/schemas/User' }, tokens: { $ref: '#/components/schemas/Tokens' } } } } } }
+  /auth/refresh:
+    post:
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { tokens: { $ref: '#/components/schemas/Tokens' } } } } } }
+        '401': { description: Invalid refresh, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      responses:
+        '204': { description: Logged out }
+  /auth/me:
+    get:
+      tags: [Auth]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { user: { $ref: '#/components/schemas/User' } } } } } }
+
+  /users:
+    patch:
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                locale: { type: string, enum: [fr, en] }
+                currency: { type: string }
+                settings: { type: object }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { type: object, properties: { user: { $ref: '#/components/schemas/User' } } } } } }
+  /users/push-tokens:
+    post:
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '201': { description: Saved }
+    delete:
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '204': { description: Deleted }
+
+  /decision/templates:
+    get:
+      tags: [Decision]
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        pattern:
+                          type: array
+                          items: { type: string }
+                        options:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              label: { type: string }
+                              pros: { type: array, items: { type: string } }
+                              cons: { type: array, items: { type: string } }
+                        defaults: { $ref: '#/components/schemas/Factors' }
+  /decision/score:
+    post:
+      tags: [Decision]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [factors]
+              properties:
+                factors: { $ref: '#/components/schemas/Factors' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  score: { type: number }
+                  rankedOptions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label: { type: string }
+                        score: { type: number }
+
+  /decisions:
+    get:
+      tags: [Decision]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, decided] }
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/parameters/ETag' }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Decision' }
+                  nextCursor: { type: string }
+    post:
+      tags: [Decision]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, factors]
+              properties:
+                title: { type: string }
+                context: { type: string }
+                factors: { $ref: '#/components/schemas/Factors' }
+                weatherContext: { $ref: '#/components/schemas/WeatherContext' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { decision: { $ref: '#/components/schemas/Decision' } } } } } }
+  /decisions/{id}:
+    get:
+      tags: [Decision]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, headers: { ETag: { $ref: '#/components/parameters/ETag' } }, content: { application/json: { schema: { type: object, properties: { decision: { $ref: '#/components/schemas/Decision' } } } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    patch:
+      tags: [Decision]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                factors: { $ref: '#/components/schemas/Factors' }
+                chosenOption: { type: string }
+                status: { type: string, enum: [pending, decided] }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { type: object, properties: { decision: { $ref: '#/components/schemas/Decision' } } } } } }
+        '412': { description: Precondition failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [Decision]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Deleted }
+
+  /finance/categories:
+    get:
+      tags: [Finance]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/FinanceCategory' } } } } }
+    post:
+      tags: [Finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: { type: string }
+                type: { type: string, enum: [expense, income, savings] }
+                color: { type: string }
+                icon: { type: string }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/FinanceCategory' } } } }
+  /finance/categories/{id}:
+    get:
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FinanceCategory' } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    patch:
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string, enum: [expense, income, savings] }
+                color: { type: string }
+                icon: { type: string }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/FinanceCategory' } } } }
+        '412': { description: Precondition failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Deleted }
+
+  /finance/transactions:
+    get:
+      tags: [Finance]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Transaction' } }, nextCursor: { type: string } } } } } }
+    post:
+      tags: [Finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Transaction'
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Transaction' } } } }
+  /finance/transactions/{id}:
+    get:
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Transaction' } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    patch:
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Transaction' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Transaction' } } } }
+        '412': { description: Precondition failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Deleted }
+
+  /finance/summary:
+    get:
+      tags: [Finance]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: baseCurrency
+          in: query
+          schema: { type: string, default: XAF }
+        - name: type
+          in: query
+          schema: { type: string, enum: [expense, income, savings] }
+        - name: period
+          in: query
+          schema: { type: string, enum: [weekly, monthly] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  baseCurrency: { type: string }
+                  totalsByType: { type: object, additionalProperties: { type: integer } }
+                  totalsByCategory: { type: array, items: { type: object, properties: { categoryId: { type: string }, amountMinor: { type: integer } } } }
+                  totalsByCategoryFiltered: { type: array, items: { type: object, properties: { categoryId: { type: string }, amountMinor: { type: integer } } } }
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        periodStart: { type: string, format: date }
+                        totalsByType: { type: object, properties: { expense: { type: integer }, income: { type: integer }, savings: { type: integer } } }
+
+  /finance/export.csv:
+    get:
+      tags: [Finance]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: baseCurrency
+          in: query
+          schema: { type: string, default: XAF }
+      responses:
+        '200':
+          description: CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /savings/plans:
+    get:
+      tags: [Savings]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SavingsPlan' } } } } }
+    post:
+      tags: [Savings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, cadence, targetAmountMinor]
+              properties:
+                name: { type: string }
+                cadence: { type: string, enum: [weekly, monthly] }
+                targetAmountMinor: { type: integer }
+                currency: { type: string, default: XAF }
+                startDate: { type: string, format: date-time }
+                annualInterestRate: { type: number }
+                autoRemind: { type: boolean }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/SavingsPlan' } } } }
+  /savings/plans/{id}:
+    get:
+      tags: [Savings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SavingsPlan' } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    patch:
+      tags: [Savings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SavingsPlan' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/SavingsPlan' } } } }
+        '412': { description: Precondition failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [Savings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Deleted }
+  /savings/plans/{id}/projection:
+    get:
+      tags: [Savings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: periods
+          in: query
+          schema: { type: integer, default: 12 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  periods: { type: integer }
+                  schedule:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        period: { type: integer }
+                        date: { type: string, format: date }
+                        principalMinor: { type: integer }
+                        interestMinor: { type: integer }
+                        totalMinor: { type: integer }
+
+  /fx/rates:
+    get:
+      tags: [External]
+      parameters:
+        - name: base
+          in: query
+          schema: { type: string, default: XAF }
+        - name: symbols
+          in: query
+          schema: { type: string, example: USD,EUR }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FXRates' } } } }
+
+  /weather:
+    get:
+      tags: [External]
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number }
+        - name: units
+          in: query
+          schema: { type: string, enum: [metric, imperial], default: metric }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Weather' } } } }
+
+  /timezone:
+    get:
+      tags: [External]
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Timezone' } } } }
+
+  /events:
+    get:
+      tags: [Events]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Event' } }, nextCursor: { type: string } } } } } }
+    post:
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, dateTime, visibility, costPerGuestMinor]
+              properties:
+                title: { type: string }
+                dateTime: { type: string, format: date-time }
+                timeZone: { type: string }
+                location: { type: string }
+                visibility: { type: string, enum: [public, private] }
+                accessCode: { type: string }
+                costPerGuestMinor: { type: integer }
+                currency: { type: string, default: XAF }
+                allowPlusOnes: { type: boolean, default: true }
+                capacity: { type: integer }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Event' } } } }
+  /events/{id}:
+    get:
+      tags: [Events]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, headers: { ETag: { $ref: '#/components/parameters/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Event' } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    patch:
+      tags: [Events]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Event' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Event' } } } }
+        '412': { description: Precondition failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [Events]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Deleted }
+  /events/{id}/budget:
+    get:
+      tags: [Events]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Budget' } } } }
+
+  /events/{eventId}/invitees:
+    get:
+      tags: [Invitees]
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Invitee' } } } } }
+    post:
+      tags: [Invitees]
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                status: { type: string, enum: [pending, yes, no, maybe] }
+                plusOnes: { type: integer, default: 0 }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Invitee' } } } }
+  /invitees/{id}:
+    patch:
+      tags: [Invitees]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Invitee' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Invitee' } } } }
+    delete:
+      tags: [Invitees]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Deleted }
+
+  /public/events/{slug}:
+    get:
+      security: []
+      tags: [Public]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: accessCode
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/EventPublic' } } } }
+        '403': { description: Forbidden (private without code), content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /public/events/{slug}/rsvp:
+    post:
+      security: []
+      tags: [Public]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                status: { type: string, enum: [yes, no, maybe], default: yes }
+                plusOnes: { type: integer, default: 0 }
+                accessCode: { type: string }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Invitee' } } } }
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Invitee' } } } }
+        '403': { description: Forbidden (private without/invalid accessCode), content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /notifications/test:
+    post:
+      tags: [Notifications]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string }
+      responses:
+        '200': { description: Sent, content: { application/json: { schema: { type: object, properties: { status: { type: string } } } } } }
+
+  /cron/savings/reminders:
+    post:
+      security:
+        - CronKey: []
+      tags: [Cron]
+      responses:
+        '202': { description: Accepted }
+  /cron/budget/alerts:
+    post:
+      security:
+        - CronKey: []
+      tags: [Cron]
+      responses:
+        '202': { description: Accepted }
+  /cron/fx/warm:
+    post:
+      security:
+        - CronKey: []
+      tags: [Cron]
+      responses:
+        '202': { description: Accepted }
