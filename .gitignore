@@ -1,0 +1,72 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# Environnements
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs
+*.log
+*.log.*
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Build outputs
+dist/
+build/
+.out/
+.next/
+coverage/
+.expo/
+.expo-shared/
+
+# IDE / éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Mac / Windows
+.DS_Store
+Thumbs.db
+
+# Tests
+coverage/
+jest-cache/
+.vitest/
+
+# Backend spécifique
+/backend/node_modules/
+/backend/dist/
+/backend/.env
+
+# Mobile spécifique (React Native / Expo)
+.mobile/node_modules/
+/mobile/.expo/
+.mobile/dist/
+/mobile/.env
+.expo/
+
+# Web spécifique (Next.js, React, etc.)
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/dist/
+
+# Charts (si buildés, sinon laisse)
+charts/*.cache
+charts/*.tmp
+
+# Docs (éviter fichiers secrets générés)
+docs/provisioning/*.env
+docs/provisioning/*.secret

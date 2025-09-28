@@ -1,0 +1,86 @@
+services:
+  - type: web
+    name: trivida-api
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/index.js
+    repo: https://github.com/your-org/trivida-backend
+    rootDir: backend
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: ACCESS_TOKEN_TTL_MIN
+        value: "15"
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: "7"
+      - key: BCRYPT_SALT_ROUNDS
+        value: "12"
+      - key: BASE_CURRENCY
+        value: XAF
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: RATE_LIMIT_MAX
+        value: "60"
+      - key: EXCHANGE_RATE_BASE_URL
+        value: https://api.exchangerate.host
+      - key: FX_CACHE_TTL_HOURS
+        value: "12"
+      - key: OPENWEATHER_BASE_URL
+        value: https://api.openweathermap.org/data/2.5
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: WEATHER_CACHE_TTL_HOURS
+        value: "1"
+      - key: TIMEZONEDB_API_KEY
+        sync: false
+      - key: TIMEZONE_CACHE_TTL_DAYS
+        value: "30"
+      - key: RESERVED_SLUGS
+        value: admin,login,api,public,assets
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
+      - key: CRON_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID_ANDROID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID_IOS
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID_WEB
+        sync: false
+      - key: APPLE_AUDIENCE
+        sync: false
+cronJobs:
+  - name: trivida-savings-reminders
+    schedule: "0 8 * * *"
+    command: >-
+      curl -s -X POST -H "X-Cron-Key: $CRON_KEY" "$RENDER_EXTERNAL_URL/cron/savings/reminders"
+    envVars:
+      - key: CRON_KEY
+        sync: false
+  - name: trivida-budget-alerts
+    schedule: "0 7 * * *"
+    command: >-
+      curl -s -X POST -H "X-Cron-Key: $CRON_KEY" "$RENDER_EXTERNAL_URL/cron/budget/alerts"
+    envVars:
+      - key: CRON_KEY
+        sync: false
+  - name: trivida-fx-warm
+    schedule: "0 */12 * * *"
+    command: >-
+      curl -s -X POST -H "X-Cron-Key: $CRON_KEY" "$RENDER_EXTERNAL_URL/cron/fx/warm"
+    envVars:
+      - key: CRON_KEY
+        sync: false
